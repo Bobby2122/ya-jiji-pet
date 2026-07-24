@@ -1,0 +1,22 @@
+.DS_Store
+*.log
+
+# Local builds and dependencies
+electron/node_modules/
+electron/dist/
+outputs/
+work/
+
+# Generated source sheets and superseded frames
+assets/duck.png
+assets/duck-chroma.png
+assets/sprites/chroma/
+assets/sprites/frames/egg-intact.png
+assets/sprites/frames/egg-cracked.png
+assets/sprites/frames/egg-peek.png
+assets/sprites/frames/egg-hatched.png
+
+# Editors
+.idea/
+.vscode/
+

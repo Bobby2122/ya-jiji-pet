@@ -1,0 +1,58 @@
+{
+  "name": "duck-jiji-desktop-pet",
+  "version": "0.3.0",
+  "description": "A quiet, offline Duck Jiji desktop companion for Windows.",
+  "main": "src/main.js",
+  "author": "Duck Jiji Pet contributors",
+  "license": "MIT",
+  "packageManager": "pnpm@11.9.0",
+  "scripts": {
+    "start": "electron .",
+    "check": "node --check src/main.js && node --check src/preload.js && node --check src/renderer.js",
+    "pack": "electron-builder --dir",
+    "dist:win": "electron-builder --win nsis portable --x64"
+  },
+  "devDependencies": {
+    "electron": "43.2.0",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.duckjiji.desktop-pet",
+    "productName": "鸭吉吉桌宠",
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "build/**/*",
+      "package.json"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "artifactName": "DuckJiji-Pet-${version}-${arch}-setup.${ext}",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "鸭吉吉桌宠",
+      "runAfterFinish": true
+    },
+    "portable": {
+      "artifactName": "DuckJiji-Pet-${version}-${arch}-portable.${ext}"
+    }
+  }
+}

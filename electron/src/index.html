@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>鸭吉吉桌宠</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main id="pet-stage" aria-label="鸭吉吉桌宠">
+      <button id="banner" class="banner hidden" type="button" title="点击关闭"></button>
+      <img id="sprite" draggable="false" alt="鸭吉吉">
+      <div id="loading">正在准备小窝…</div>
+    </main>
+
+    <section id="modal" class="modal hidden" aria-modal="true" role="dialog">
+      <div class="panel">
+        <header>
+          <div>
+            <p class="eyebrow">DUCK JIJI</p>
+            <h1 id="modal-title">我的鸭吉吉</h1>
+          </div>
+          <button id="modal-close" class="close" type="button" aria-label="关闭">×</button>
+        </header>
+        <div id="modal-content" class="modal-content"></div>
+      </div>
+    </section>
+
+    <script src="renderer.js"></script>
+  </body>
+</html>
