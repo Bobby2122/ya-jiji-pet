@@ -3,19 +3,19 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const WINDOW = { width: 292, height: 326 };
+const WINDOW = { width: 234, height: 261 };
 const DAY_START_HOUR = 6;
 const HATCH_HOUR = 17;
 const DINNER_START_MINUTE = 15;
 const DINNER_END_HOUR = 19;
 
 const SKINS = [
-  { id: 'classic', name: '暖阳原色', rarity: '普通', chance: '68%', weight: 68, body: '#f5b91f', belly: '#f8dc58', beak: '#ed7e61', feet: '#b95338', cheeks: '#ee8b8c' },
-  { id: 'strawberry', name: '草莓奶', rarity: '少见', chance: '10%', weight: 10, body: '#eab9b4', belly: '#f4e5c8', beak: '#d87982', feet: '#8c514a', cheeks: '#e96573' },
-  { id: 'mint', name: '薄荷汽水', rarity: '少见', chance: '8%', weight: 8, body: '#a9cfc0', belly: '#d5e7d7', beak: '#e99b7c', feet: '#438f8c', cheeks: '#e99572' },
-  { id: 'lavender', name: '薰衣草梦', rarity: '少见', chance: '8%', weight: 8, body: '#b9a9ce', belly: '#ded5e6', beak: '#976584', feet: '#60425e', cheeks: '#dd7e9d' },
-  { id: 'midnight', name: '星夜', rarity: '稀有', chance: '5%', weight: 5, body: '#26345d', belly: '#4e5c88', beak: '#d8a548', feet: '#403354', cheeks: '#d5a341' },
-  { id: 'prism', name: '虹彩', rarity: '超稀有', chance: '1%', weight: 1, body: '#e8b9ca', belly: '#e7e8c7', beak: '#df7f78', feet: '#a85970', cheeks: '#e7798b', prism: true }
+  { id: 'classic', name: '暖阳原色', rarity: '普通', chance: '16.7%', weight: 1, body: '#f5b91f', belly: '#f8dc58', beak: '#ed7e61', feet: '#b95338', cheeks: '#ee8b8c' },
+  { id: 'strawberry', name: '草莓奶', rarity: '少见', chance: '16.7%', weight: 1, body: '#eab9b4', belly: '#f4e5c8', beak: '#d87982', feet: '#8c514a', cheeks: '#e96573' },
+  { id: 'mint', name: '薄荷汽水', rarity: '少见', chance: '16.7%', weight: 1, body: '#a9cfc0', belly: '#d5e7d7', beak: '#e99b7c', feet: '#438f8c', cheeks: '#e99572' },
+  { id: 'lavender', name: '薰衣草梦', rarity: '少见', chance: '16.7%', weight: 1, body: '#b9a9ce', belly: '#ded5e6', beak: '#976584', feet: '#60425e', cheeks: '#dd7e9d' },
+  { id: 'midnight', name: '星夜', rarity: '稀有', chance: '16.7%', weight: 1, body: '#26345d', belly: '#4e5c88', beak: '#d8a548', feet: '#403354', cheeks: '#d5a341' },
+  { id: 'prism', name: '虹彩', rarity: '超稀有', chance: '16.7%', weight: 1, body: '#e8b9ca', belly: '#e7e8c7', beak: '#df7f78', feet: '#a85970', cheeks: '#e7798b', prism: true }
 ];
 
 let petWindow;
@@ -25,8 +25,7 @@ let hatchTimer;
 let scheduleTimer;
 let motionTimer;
 let dragState;
-let lastCursor;
-let lastCursorActivity = Date.now();
+let lastPetActivity = Date.now();
 let walkFrame = false;
 let lastWalkFrameAt = 0;
 
@@ -49,7 +48,8 @@ function hatchDateFor(key) {
 }
 
 function randomSkin() {
-  let roll = Math.random() * 100;
+  const totalWeight = SKINS.reduce((sum, skin) => sum + skin.weight, 0);
+  let roll = Math.random() * totalWeight;
   for (const skin of SKINS) {
     roll -= skin.weight;
     if (roll < 0) return skin;
@@ -296,42 +296,16 @@ function showContextMenu() {
   menu.popup({ window: petWindow });
 }
 
-function startMotionTracking() {
-  lastCursor = screen.getCursorScreenPoint();
+function startIdleTracking() {
   motionTimer = setInterval(() => {
     if (!petWindow || petWindow.isDestroyed() || dragState) return;
-    const cursor = screen.getCursorScreenPoint();
-    const cursorDelta = Math.hypot(cursor.x - lastCursor.x, cursor.y - lastCursor.y);
-    if (cursorDelta > 1.8) {
-      lastCursorActivity = Date.now();
-      lastCursor = cursor;
-    }
-
-    const canWalk = state.hatchedToday || state.displayMode === 'pet';
-    const bounds = petWindow.getBounds();
-    const distance = cursor.x - (bounds.x + bounds.width / 2);
-    const recentlyMoved = Date.now() - lastCursorActivity < 550;
-    let walking = false;
-    let direction = distance >= 0 ? 1 : -1;
-
-    if (canWalk && recentlyMoved && Math.abs(distance) > 58) {
-      const display = screen.getDisplayMatching(bounds).workArea;
-      const nextX = Math.max(display.x, Math.min(display.x + display.width - bounds.width, bounds.x + direction * 4));
-      petWindow.setPosition(Math.round(nextX), bounds.y, false);
-      walking = true;
-      if (Date.now() - lastWalkFrameAt > 160) {
-        walkFrame = !walkFrame;
-        lastWalkFrameAt = Date.now();
-      }
-    }
-
     send('pet:motion', {
-      walking,
-      direction,
+      walking: false,
+      direction: 1,
       walkFrame,
-      idleFor: Date.now() - lastCursorActivity
+      idleFor: Date.now() - lastPetActivity
     });
-  }, 80);
+  }, 1000);
 }
 
 function installIpc() {
@@ -339,17 +313,41 @@ function installIpc() {
   ipcMain.on('menu:show', showContextMenu);
   ipcMain.on('pet:drag-start', (_event, point) => {
     if (!petWindow) return;
-    dragState = { point, bounds: petWindow.getBounds() };
+    lastPetActivity = Date.now();
+    dragState = { point, lastPoint: point, bounds: petWindow.getBounds(), direction: 1 };
   });
   ipcMain.on('pet:drag-move', (_event, point) => {
     if (!petWindow || !dragState) return;
-    petWindow.setPosition(
-      Math.round(dragState.bounds.x + point.x - dragState.point.x),
-      Math.round(dragState.bounds.y + point.y - dragState.point.y),
-      false
-    );
+    const stepX = point.x - dragState.lastPoint.x;
+    const moved = Math.abs(point.x - dragState.point.x) + Math.abs(point.y - dragState.point.y) > 4;
+    if (Math.abs(stepX) > 0.5) dragState.direction = stepX > 0 ? 1 : -1;
+    dragState.lastPoint = point;
+    lastPetActivity = Date.now();
+    const display = screen.getDisplayNearestPoint(point).workArea;
+    const proposedX = dragState.bounds.x + point.x - dragState.point.x;
+    const proposedY = dragState.bounds.y + point.y - dragState.point.y;
+    const nextX = Math.max(display.x, Math.min(display.x + display.width - WINDOW.width, proposedX));
+    const nextY = Math.max(display.y, Math.min(display.y + display.height - WINDOW.height, proposedY));
+    petWindow.setPosition(Math.round(nextX), Math.round(nextY), false);
+    if (moved && (state.hatchedToday || state.displayMode === 'pet')) {
+      if (Date.now() - lastWalkFrameAt > 160) {
+        walkFrame = !walkFrame;
+        lastWalkFrameAt = Date.now();
+      }
+      send('pet:motion', {
+        walking: true,
+        direction: dragState.direction,
+        walkFrame,
+        idleFor: 0
+      });
+    }
   });
-  ipcMain.on('pet:drag-end', () => { dragState = undefined; });
+  ipcMain.on('pet:drag-end', () => {
+    const direction = dragState?.direction || 1;
+    dragState = undefined;
+    lastPetActivity = Date.now();
+    send('pet:motion', { walking: false, direction, walkFrame, idleFor: 0 });
+  });
   ipcMain.on('collection:select', (_event, id) => {
     if (!state.collection.some((pet) => pet.id === id)) return;
     state.selectedPetId = id;
@@ -363,7 +361,7 @@ app.whenReady().then(() => {
   loadState();
   installIpc();
   createWindow();
-  startMotionTracking();
+  startIdleTracking();
   scheduleTimer = setInterval(checkSchedule, 30_000);
 });
 

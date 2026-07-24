@@ -1,6 +1,6 @@
 {
   "name": "duck-jiji-desktop-pet",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "A quiet, offline Duck Jiji desktop companion for Windows.",
   "main": "src/main.js",
   "author": "Duck Jiji Pet contributors",

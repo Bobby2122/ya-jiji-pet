@@ -3,7 +3,7 @@ import Foundation
 import ServiceManagement
 
 private enum PetConfig {
-    static let windowSize = NSSize(width: 276, height: 302)
+    static let windowSize = NSSize(width: 221, height: 242)
     static let dayStartsAtHour = 6
     static let hatchHour = 17
     static let dinnerReminderMinute = 15
@@ -208,15 +208,7 @@ private enum SkinCatalog {
     }
 
     static func randomHatchSkin() -> SkinPalette {
-        let roll = Double.random(in: 0..<1)
-        switch roll {
-        case 0..<0.68: return palette("classic")
-        case 0..<0.78: return palette("strawberry")
-        case 0..<0.86: return palette("mint")
-        case 0..<0.94: return palette("lavender")
-        case 0..<0.99: return palette("midnight")
-        default: return palette("prism")
-        }
+        all.randomElement() ?? all[0]
     }
 }
 
@@ -252,6 +244,11 @@ private final class SpriteRenderer {
         let result = recolor(source, palette: SkinCatalog.palette(skinID)) ?? source
         renderedCache[cacheKey] = result
         return result
+    }
+
+    func prewarmWalkFrames(skinID: String) {
+        _ = image(named: "adult-walk-a", skinID: skinID)
+        _ = image(named: "adult-walk-b", skinID: skinID)
     }
 
     private func sourceImage(named name: String) -> NSImage? {
@@ -410,6 +407,7 @@ private final class PetView: NSView {
     private var isDraggingPet = false
     private var dragMoved = false
     private var dragStartMouse = NSPoint.zero
+    private var lastDragMouse = NSPoint.zero
     private var dragStartWindow = NSPoint.zero
     private var hatchScheduled = false
     private var isPreviewing = false
@@ -429,14 +427,14 @@ private final class PetView: NSView {
     required init?(coder: NSCoder) { nil }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
-        if imageView.frame.insetBy(dx: 12, dy: 8).contains(point) || (!banner.isHidden && banner.frame.contains(point)) {
+        if imageView.frame.insetBy(dx: 10, dy: 6).contains(point) || (!banner.isHidden && banner.frame.contains(point)) {
             return self
         }
         return nil
     }
 
     private func setupImage() {
-        imageView.frame = NSRect(x: 14, y: 0, width: 248, height: 258)
+        imageView.frame = NSRect(x: 11, y: 0, width: 199, height: 207)
         imageView.imageScaling = .scaleProportionallyUpOrDown
         imageView.wantsLayer = true
         imageView.layer?.anchorPoint = CGPoint(x: 0.5, y: 0.5)
@@ -444,15 +442,15 @@ private final class PetView: NSView {
     }
 
     private func setupBanner() {
-        banner.frame = NSRect(x: 10, y: 250, width: 256, height: 46)
+        banner.frame = NSRect(x: 8, y: 200, width: 205, height: 37)
         banner.isHidden = true
         banner.alignment = .center
-        banner.font = .systemFont(ofSize: 13, weight: .medium)
+        banner.font = .systemFont(ofSize: 11, weight: .medium)
         banner.textColor = NSColor(calibratedWhite: 0.18, alpha: 1)
         banner.backgroundColor = NSColor(calibratedRed: 1, green: 0.97, blue: 0.83, alpha: 0.97)
         banner.isBordered = false
         banner.wantsLayer = true
-        banner.layer?.cornerRadius = 15
+        banner.layer?.cornerRadius = 12
         banner.layer?.borderWidth = 1
         banner.layer?.borderColor = NSColor(calibratedWhite: 0.25, alpha: 0.15).cgColor
         addSubview(banner)
@@ -492,6 +490,10 @@ private final class PetView: NSView {
             setFrame(store.eggFrame(at: Date()))
         } else {
             setFrame("adult-idle")
+            let skinID = activeSkinID()
+            DispatchQueue.main.async {
+                SpriteRenderer.shared.prewarmWalkFrames(skinID: skinID)
+            }
         }
     }
 
@@ -531,7 +533,7 @@ private final class PetView: NSView {
     }
 
     private func updateMouseMotion() {
-        guard let window, !isDraggingPet, !isPreviewing else { return }
+        guard !isDraggingPet, !isPreviewing else { return }
         let mouse = NSEvent.mouseLocation
         let delta = hypot(mouse.x - lastMouse.x, mouse.y - lastMouse.y)
         if delta > 1.8 {
@@ -544,37 +546,11 @@ private final class PetView: NSView {
             return
         }
 
-        let recentlyMoved = Date().timeIntervalSince(lastMouseActivity) < 0.55
-        let distance = mouse.x - window.frame.midX
-        if recentlyMoved && abs(distance) > 58 {
-            let direction: CGFloat = distance > 0 ? 1 : -1
-            moveWindowHorizontally(direction: direction)
-            isWalking = true
-            if Date().timeIntervalSince(lastWalkFrameChange) > 0.16 {
-                walkFrame.toggle()
-                lastWalkFrameChange = Date()
-            }
-            setFrame(walkFrame ? "adult-walk-a" : "adult-walk-b", mirrored: direction > 0)
-        } else {
-            if isWalking {
-                isWalking = false
-                setFrame("adult-idle")
-            } else if Date().timeIntervalSince(lastMouseActivity) > 180 && currentFrame != "adult-sleep" {
-                setFrame("adult-sleep")
-            }
+        if Date().timeIntervalSince(lastMouseActivity) > 180 {
+            if currentFrame != "adult-sleep" { setFrame("adult-sleep") }
+        } else if currentFrame == "adult-sleep" {
+            setFrame("adult-idle")
         }
-    }
-
-    private func moveWindowHorizontally(direction: CGFloat) {
-        guard let window else { return }
-        let center = NSPoint(x: window.frame.midX, y: window.frame.midY)
-        let screen = NSScreen.screens.first(where: { $0.frame.contains(center) }) ?? NSScreen.main
-        guard let visible = screen?.visibleFrame else { return }
-        var origin = window.frame.origin
-        origin.x += direction * 4.2
-        origin.x = max(visible.minX, min(visible.maxX - window.frame.width, origin.x))
-        origin.y = max(visible.minY + 2, origin.y)
-        window.setFrameOrigin(origin)
     }
 
     private func checkDailySchedule() {
@@ -622,7 +598,7 @@ private final class PetView: NSView {
     private func bounce() {
         imageView.layer?.removeAnimation(forKey: "hatchBounce")
         let animation = CAKeyframeAnimation(keyPath: "transform.translation.y")
-        animation.values = [0, 16, 0, 9, 0]
+        animation.values = [0, 13, 0, 7, 0]
         animation.duration = 0.65
         imageView.layer?.add(animation, forKey: "hatchBounce")
     }
@@ -651,6 +627,7 @@ private final class PetView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         dragStartMouse = NSEvent.mouseLocation
+        lastDragMouse = dragStartMouse
         dragStartWindow = window?.frame.origin ?? .zero
         dragMoved = false
         isDraggingPet = true
@@ -662,11 +639,35 @@ private final class PetView: NSView {
         let dx = now.x - dragStartMouse.x
         let dy = now.y - dragStartMouse.y
         if abs(dx) + abs(dy) > 4 { dragMoved = true }
-        window.setFrameOrigin(NSPoint(x: dragStartWindow.x + dx, y: dragStartWindow.y + dy))
+        let stepX = now.x - lastDragMouse.x
+        if dragMoved && abs(stepX) > 0.5 &&
+            (store.state.displayMode == "pet" || store.state.hatchedToday) {
+            isWalking = true
+            if Date().timeIntervalSince(lastWalkFrameChange) > 0.16 {
+                walkFrame.toggle()
+                lastWalkFrameChange = Date()
+            }
+            setFrame(walkFrame ? "adult-walk-a" : "adult-walk-b", mirrored: stepX > 0)
+        }
+        lastDragMouse = now
+        var target = NSPoint(x: dragStartWindow.x + dx, y: dragStartWindow.y + dy)
+        let targetScreen = NSScreen.screens.first(where: { $0.frame.contains(now) }) ??
+            NSScreen.screens.first(where: { $0.frame.intersects(NSRect(origin: target, size: window.frame.size)) }) ??
+            NSScreen.main
+        if let visible = targetScreen?.visibleFrame {
+            target.x = max(visible.minX, min(visible.maxX - window.frame.width, target.x))
+            target.y = max(visible.minY, min(visible.maxY - window.frame.height, target.y))
+        }
+        window.setFrameOrigin(target)
     }
 
     override func mouseUp(with event: NSEvent) {
         isDraggingPet = false
+        isWalking = false
+        if dragMoved {
+            refreshAppearance()
+            return
+        }
         if !dragMoved {
             if !banner.isHidden && banner.frame.contains(convert(event.locationInWindow, from: nil)) {
                 bannerDismiss?.perform()
@@ -773,7 +774,7 @@ private final class PetView: NSView {
         }.joined(separator: "\n")
         let alert = NSAlert()
         alert.messageText = "异色图鉴  \(unlocked.count)/\(SkinCatalog.all.count)"
-        alert.informativeText = lines + "\n\n概率：原色68% · 三种少见各约8–10% · 星夜5% · 虹彩1%"
+        alert.informativeText = lines + "\n\n孵化概率：每种颜色相同，均为 1/6（约 16.7%）"
         alert.addButton(withTitle: "继续孵蛋")
         alert.runModal()
     }

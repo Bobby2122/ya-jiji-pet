@@ -27,11 +27,14 @@ let walking = false;
 let bannerTimer;
 let dragStart;
 let dragged = false;
+let pendingDragPoint;
+let dragAnimationFrame;
 let blinkTimer;
 let actionTimer;
 let renderTicket = 0;
 const recolorCache = new Map();
 const sourceCache = new Map();
+let warmedWalkSkin = '';
 
 function skinById(id) {
   return appState?.skins.find((skin) => skin.id === id) || appState?.skins[0];
@@ -147,13 +150,26 @@ async function setFrame(frame, skinId = appState?.activeSkinId, mirrored = false
     return;
   }
   const ticket = ++renderTicket;
-  const url = await renderedUrl(frame, skinId);
-  if (ticket !== renderTicket) return;
-  sprite.src = url;
-  sprite.classList.toggle('mirror', mirrored);
-  currentFrame = frame;
-  currentSkin = skinId;
-  loading.classList.add('hidden');
+  try {
+    const url = await renderedUrl(frame, skinId);
+    if (ticket !== renderTicket) return;
+    sprite.src = url;
+    sprite.classList.toggle('mirror', mirrored);
+    currentFrame = frame;
+    currentSkin = skinId;
+    loading.classList.add('hidden');
+  } catch (error) {
+    console.error('Unable to render pet frame:', frame, error);
+  }
+}
+
+function prewarmWalkFrames(skinId) {
+  if (!skinId || warmedWalkSkin === skinId) return;
+  warmedWalkSkin = skinId;
+  Promise.all([
+    renderedUrl('adult-walk-a', skinId),
+    renderedUrl('adult-walk-b', skinId)
+  ]).catch((error) => console.error('Unable to prewarm walk frames:', error));
 }
 
 function normalFrame() {
@@ -309,6 +325,8 @@ sprite.addEventListener('pointerdown', (event) => {
   if (event.button !== 0) return;
   dragStart = { x: event.screenX, y: event.screenY };
   dragged = false;
+  pendingDragPoint = undefined;
+  sprite.style.visibility = 'visible';
   sprite.setPointerCapture(event.pointerId);
   window.duckPet.dragStart(dragStart);
 });
@@ -317,20 +335,42 @@ sprite.addEventListener('pointermove', (event) => {
   if (!dragStart || !(event.buttons & 1)) return;
   const point = { x: event.screenX, y: event.screenY };
   if (Math.abs(point.x - dragStart.x) + Math.abs(point.y - dragStart.y) > 4) dragged = true;
-  window.duckPet.dragMove(point);
+  pendingDragPoint = point;
+  if (!dragAnimationFrame) {
+    dragAnimationFrame = requestAnimationFrame(() => {
+      dragAnimationFrame = undefined;
+      if (pendingDragPoint) window.duckPet.dragMove(pendingDragPoint);
+      pendingDragPoint = undefined;
+    });
+  }
 });
 
-sprite.addEventListener('pointerup', () => {
+function finishDrag(allowClick) {
+  if (!dragStart) return;
+  if (dragAnimationFrame) cancelAnimationFrame(dragAnimationFrame);
+  dragAnimationFrame = undefined;
+  if (pendingDragPoint) window.duckPet.dragMove(pendingDragPoint);
+  pendingDragPoint = undefined;
   window.duckPet.dragEnd();
   dragStart = undefined;
-  if (!dragged) {
+  if (!dragged && allowClick) {
     animateClass('bounce');
     if (appState?.hatchedToday || appState?.displayMode === 'pet') {
       setFrame('adult-tilt', appState.activeSkinId, false, true);
       setTimeout(normalFrame, 650);
     }
+  } else {
+    walking = false;
+    normalFrame();
   }
+}
+
+sprite.addEventListener('pointerup', () => {
+  finishDrag(true);
 });
+
+sprite.addEventListener('pointercancel', () => finishDrag(false));
+sprite.addEventListener('lostpointercapture', () => finishDrag(false));
 
 banner.addEventListener('click', () => banner.classList.add('hidden'));
 modalClose.addEventListener('click', closeModal);
@@ -338,6 +378,7 @@ modal.addEventListener('pointerdown', (event) => { if (event.target === modal) c
 
 window.duckPet.onState((nextState) => {
   appState = nextState;
+  if (appState.hatchedToday || appState.displayMode === 'pet') prewarmWalkFrames(appState.activeSkinId);
   if (!previewing && !walking) normalFrame();
 });
 
@@ -369,4 +410,3 @@ window.duckPet.onPreviewHatch(() => previewHatch());
 scheduleBlink();
 scheduleAction();
 window.duckPet.ready();
-
