@@ -9,8 +9,8 @@ function subscribe(channel, callback) {
 contextBridge.exposeInMainWorld('duckPet', {
   ready: () => ipcRenderer.send('app:ready'),
   showMenu: () => ipcRenderer.send('menu:show'),
-  dragStart: (point) => ipcRenderer.send('pet:drag-start', point),
-  dragMove: (point) => ipcRenderer.send('pet:drag-move', point),
+  dragStart: () => ipcRenderer.send('pet:drag-start'),
+  dragMove: () => ipcRenderer.send('pet:drag-move'),
   dragEnd: () => ipcRenderer.send('pet:drag-end'),
   selectPet: (id) => ipcRenderer.send('collection:select', id),
   onState: (callback) => subscribe('state:update', callback),
@@ -21,4 +21,3 @@ contextBridge.exposeInMainWorld('duckPet', {
   onPreviewSkin: (callback) => subscribe('ui:preview-skin', callback),
   onPreviewHatch: (callback) => subscribe('ui:preview-hatch', callback)
 });
-

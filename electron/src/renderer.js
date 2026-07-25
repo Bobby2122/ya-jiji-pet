@@ -328,7 +328,7 @@ sprite.addEventListener('pointerdown', (event) => {
   pendingDragPoint = undefined;
   sprite.style.visibility = 'visible';
   sprite.setPointerCapture(event.pointerId);
-  window.duckPet.dragStart(dragStart);
+  window.duckPet.dragStart();
 });
 
 sprite.addEventListener('pointermove', (event) => {
@@ -339,7 +339,7 @@ sprite.addEventListener('pointermove', (event) => {
   if (!dragAnimationFrame) {
     dragAnimationFrame = requestAnimationFrame(() => {
       dragAnimationFrame = undefined;
-      if (pendingDragPoint) window.duckPet.dragMove(pendingDragPoint);
+      if (pendingDragPoint) window.duckPet.dragMove();
       pendingDragPoint = undefined;
     });
   }
@@ -349,7 +349,7 @@ function finishDrag(allowClick) {
   if (!dragStart) return;
   if (dragAnimationFrame) cancelAnimationFrame(dragAnimationFrame);
   dragAnimationFrame = undefined;
-  if (pendingDragPoint) window.duckPet.dragMove(pendingDragPoint);
+  if (pendingDragPoint) window.duckPet.dragMove();
   pendingDragPoint = undefined;
   window.duckPet.dragEnd();
   dragStart = undefined;

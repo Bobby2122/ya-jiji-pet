@@ -311,13 +311,18 @@ function startIdleTracking() {
 function installIpc() {
   ipcMain.on('app:ready', publishState);
   ipcMain.on('menu:show', showContextMenu);
-  ipcMain.on('pet:drag-start', (_event, point) => {
+  ipcMain.on('pet:drag-start', () => {
     if (!petWindow) return;
+    const point = screen.getCursorScreenPoint();
     lastPetActivity = Date.now();
     dragState = { point, lastPoint: point, bounds: petWindow.getBounds(), direction: 1 };
   });
-  ipcMain.on('pet:drag-move', (_event, point) => {
+  ipcMain.on('pet:drag-move', () => {
     if (!petWindow || !dragState) return;
+    // Browser MouseEvent.screenX/screenY can be physical pixels while
+    // BrowserWindow positions use DIP on scaled Windows displays. Reading the
+    // cursor here keeps drag math in the same coordinate system as the window.
+    const point = screen.getCursorScreenPoint();
     const stepX = point.x - dragState.lastPoint.x;
     const moved = Math.abs(point.x - dragState.point.x) + Math.abs(point.y - dragState.point.y) > 4;
     if (Math.abs(stepX) > 0.5) dragState.direction = stepX > 0 ? 1 : -1;
