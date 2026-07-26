@@ -5,6 +5,8 @@ const modal = document.querySelector('#modal');
 const modalTitle = document.querySelector('#modal-title');
 const modalContent = document.querySelector('#modal-content');
 const modalClose = document.querySelector('#modal-close');
+const hitCanvas = document.createElement('canvas');
+const hitContext = hitCanvas.getContext('2d', { willReadFrequently: true });
 
 const frameUrls = {
   'adult-idle': '../assets/sprites/adult-idle.png',
@@ -35,6 +37,40 @@ let renderTicket = 0;
 const recolorCache = new Map();
 const sourceCache = new Map();
 let warmedWalkSkin = '';
+let hitPixels;
+let hitWidth = 0;
+let hitHeight = 0;
+let hitSource = '';
+
+function rebuildSpriteHitMap() {
+  if (!sprite.complete || !sprite.naturalWidth || !sprite.naturalHeight) return;
+  hitCanvas.width = sprite.naturalWidth;
+  hitCanvas.height = sprite.naturalHeight;
+  hitContext.clearRect(0, 0, hitCanvas.width, hitCanvas.height);
+  hitContext.drawImage(sprite, 0, 0);
+  hitPixels = hitContext.getImageData(0, 0, hitCanvas.width, hitCanvas.height).data;
+  hitWidth = hitCanvas.width;
+  hitHeight = hitCanvas.height;
+  hitSource = sprite.currentSrc || sprite.src;
+}
+
+function hitsVisibleSprite(event) {
+  const source = sprite.currentSrc || sprite.src;
+  if (!hitPixels || hitSource !== source) rebuildSpriteHitMap();
+  if (!hitPixels || !hitWidth || !hitHeight) return false;
+
+  const rect = sprite.getBoundingClientRect();
+  const scale = Math.min(rect.width / hitWidth, rect.height / hitHeight);
+  const drawnWidth = hitWidth * scale;
+  const drawnHeight = hitHeight * scale;
+  const left = rect.left + (rect.width - drawnWidth) / 2;
+  const top = rect.top + (rect.height - drawnHeight) / 2;
+  const imageX = Math.floor((event.clientX - left) / scale);
+  const imageY = Math.floor((event.clientY - top) / scale);
+  if (imageX < 0 || imageY < 0 || imageX >= hitWidth || imageY >= hitHeight) return false;
+
+  return hitPixels[(imageY * hitWidth + imageX) * 4 + 3] >= 24;
+}
 
 function skinById(id) {
   return appState?.skins.find((skin) => skin.id === id) || appState?.skins[0];
@@ -318,11 +354,12 @@ function closeModal() {
 
 sprite.addEventListener('contextmenu', (event) => {
   event.preventDefault();
+  if (!hitsVisibleSprite(event)) return;
   window.duckPet.showMenu();
 });
 
 sprite.addEventListener('pointerdown', (event) => {
-  if (event.button !== 0) return;
+  if (event.button !== 0 || !hitsVisibleSprite(event)) return;
   dragStart = { x: event.screenX, y: event.screenY };
   dragged = false;
   pendingDragPoint = undefined;
@@ -332,6 +369,7 @@ sprite.addEventListener('pointerdown', (event) => {
 });
 
 sprite.addEventListener('pointermove', (event) => {
+  if (!dragStart) sprite.classList.toggle('pixel-hit', hitsVisibleSprite(event));
   if (!dragStart || !(event.buttons & 1)) return;
   const point = { x: event.screenX, y: event.screenY };
   if (Math.abs(point.x - dragStart.x) + Math.abs(point.y - dragStart.y) > 4) dragged = true;
@@ -371,6 +409,10 @@ sprite.addEventListener('pointerup', () => {
 
 sprite.addEventListener('pointercancel', () => finishDrag(false));
 sprite.addEventListener('lostpointercapture', () => finishDrag(false));
+sprite.addEventListener('pointerleave', () => {
+  if (!dragStart) sprite.classList.remove('pixel-hit');
+});
+sprite.addEventListener('load', rebuildSpriteHitMap);
 
 banner.addEventListener('click', () => banner.classList.add('hidden'));
 modalClose.addEventListener('click', closeModal);

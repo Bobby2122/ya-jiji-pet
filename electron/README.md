@@ -22,8 +22,8 @@ pnpm run dist:win
 
 结果位于 `dist/`：
 
-- `*-setup.exe`：可选择安装目录的安装版。
-- `*-portable.exe`：双击即用的免安装版。
+- `DuckJiji-Pet-Windows-Setup.exe`：可选择安装目录的安装版。
+- `DuckJiji-Pet-Windows-Portable.exe`：双击即用的免安装版。
 
 应用未配置商业代码签名，因此首次下载时 Windows 可能显示 SmartScreen 提示。正式公开发布时建议购买代码签名证书并按 electron-builder 文档配置签名。
 
