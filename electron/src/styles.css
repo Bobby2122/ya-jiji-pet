@@ -35,12 +35,18 @@ button { font: inherit; }
   backface-visibility: hidden;
   will-change: transform, translate;
   filter: drop-shadow(0 6px 5px rgba(61, 42, 20, 0.18));
-  cursor: default;
+  pointer-events: none;
+}
+
+#sprite-hitbox {
+  position: absolute;
+  z-index: 3;
+  display: none;
+  cursor: grab;
   touch-action: none;
 }
 
-#sprite.pixel-hit { cursor: grab; }
-#sprite.pixel-hit:active { cursor: grabbing; }
+#sprite-hitbox:active { cursor: grabbing; }
 #sprite.mirror { transform: scaleX(-1); }
 #sprite.bounce { animation: bounce 650ms cubic-bezier(.2,.8,.3,1); }
 #sprite.hatch { animation: hatch 900ms cubic-bezier(.2,.85,.3,1); }

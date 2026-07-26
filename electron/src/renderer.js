@@ -5,6 +5,7 @@ const modal = document.querySelector('#modal');
 const modalTitle = document.querySelector('#modal-title');
 const modalContent = document.querySelector('#modal-content');
 const modalClose = document.querySelector('#modal-close');
+const spriteHitbox = document.querySelector('#sprite-hitbox');
 const hitCanvas = document.createElement('canvas');
 const hitContext = hitCanvas.getContext('2d', { willReadFrequently: true });
 
@@ -37,39 +38,46 @@ let renderTicket = 0;
 const recolorCache = new Map();
 const sourceCache = new Map();
 let warmedWalkSkin = '';
-let hitPixels;
-let hitWidth = 0;
-let hitHeight = 0;
-let hitSource = '';
-
-function rebuildSpriteHitMap() {
+function rebuildSpriteHitbox() {
   if (!sprite.complete || !sprite.naturalWidth || !sprite.naturalHeight) return;
   hitCanvas.width = sprite.naturalWidth;
   hitCanvas.height = sprite.naturalHeight;
   hitContext.clearRect(0, 0, hitCanvas.width, hitCanvas.height);
   hitContext.drawImage(sprite, 0, 0);
-  hitPixels = hitContext.getImageData(0, 0, hitCanvas.width, hitCanvas.height).data;
-  hitWidth = hitCanvas.width;
-  hitHeight = hitCanvas.height;
-  hitSource = sprite.currentSrc || sprite.src;
-}
-
-function hitsVisibleSprite(event) {
-  const source = sprite.currentSrc || sprite.src;
-  if (!hitPixels || hitSource !== source) rebuildSpriteHitMap();
-  if (!hitPixels || !hitWidth || !hitHeight) return false;
-
+  const pixels = hitContext.getImageData(0, 0, hitCanvas.width, hitCanvas.height).data;
+  let minimumX = hitCanvas.width;
+  let minimumY = hitCanvas.height;
+  let maximumX = -1;
+  let maximumY = -1;
+  for (let y = 0; y < hitCanvas.height; y += 1) {
+    for (let x = 0; x < hitCanvas.width; x += 1) {
+      if (pixels[(y * hitCanvas.width + x) * 4 + 3] < 24) continue;
+      minimumX = Math.min(minimumX, x);
+      minimumY = Math.min(minimumY, y);
+      maximumX = Math.max(maximumX, x);
+      maximumY = Math.max(maximumY, y);
+    }
+  }
+  if (maximumX < minimumX || maximumY < minimumY) {
+    spriteHitbox.style.display = 'none';
+    return;
+  }
   const rect = sprite.getBoundingClientRect();
-  const scale = Math.min(rect.width / hitWidth, rect.height / hitHeight);
-  const drawnWidth = hitWidth * scale;
-  const drawnHeight = hitHeight * scale;
+  const scale = Math.min(rect.width / hitCanvas.width, rect.height / hitCanvas.height);
+  const drawnWidth = hitCanvas.width * scale;
+  const drawnHeight = hitCanvas.height * scale;
   const left = rect.left + (rect.width - drawnWidth) / 2;
   const top = rect.top + (rect.height - drawnHeight) / 2;
-  const imageX = Math.floor((event.clientX - left) / scale);
-  const imageY = Math.floor((event.clientY - top) / scale);
-  if (imageX < 0 || imageY < 0 || imageX >= hitWidth || imageY >= hitHeight) return false;
-
-  return hitPixels[(imageY * hitWidth + imageX) * 4 + 3] >= 24;
+  const padding = 3;
+  const hitLeft = Math.max(0, left + minimumX * scale - padding);
+  const hitTop = Math.max(0, top + minimumY * scale - padding);
+  const hitRight = Math.min(window.innerWidth, left + (maximumX + 1) * scale + padding);
+  const hitBottom = Math.min(window.innerHeight, top + (maximumY + 1) * scale + padding);
+  spriteHitbox.style.left = `${hitLeft}px`;
+  spriteHitbox.style.top = `${hitTop}px`;
+  spriteHitbox.style.width = `${Math.max(1, hitRight - hitLeft)}px`;
+  spriteHitbox.style.height = `${Math.max(1, hitBottom - hitTop)}px`;
+  spriteHitbox.style.display = 'block';
 }
 
 function skinById(id) {
@@ -352,24 +360,22 @@ function closeModal() {
   modal.classList.add('hidden');
 }
 
-sprite.addEventListener('contextmenu', (event) => {
+spriteHitbox.addEventListener('contextmenu', (event) => {
   event.preventDefault();
-  if (!hitsVisibleSprite(event)) return;
   window.duckPet.showMenu();
 });
 
-sprite.addEventListener('pointerdown', (event) => {
-  if (event.button !== 0 || !hitsVisibleSprite(event)) return;
+spriteHitbox.addEventListener('pointerdown', (event) => {
+  if (event.button !== 0) return;
   dragStart = { x: event.screenX, y: event.screenY };
   dragged = false;
   pendingDragPoint = undefined;
   sprite.style.visibility = 'visible';
-  sprite.setPointerCapture(event.pointerId);
+  spriteHitbox.setPointerCapture(event.pointerId);
   window.duckPet.dragStart();
 });
 
-sprite.addEventListener('pointermove', (event) => {
-  if (!dragStart) sprite.classList.toggle('pixel-hit', hitsVisibleSprite(event));
+spriteHitbox.addEventListener('pointermove', (event) => {
   if (!dragStart || !(event.buttons & 1)) return;
   const point = { x: event.screenX, y: event.screenY };
   if (Math.abs(point.x - dragStart.x) + Math.abs(point.y - dragStart.y) > 4) dragged = true;
@@ -403,16 +409,14 @@ function finishDrag(allowClick) {
   }
 }
 
-sprite.addEventListener('pointerup', () => {
+spriteHitbox.addEventListener('pointerup', () => {
   finishDrag(true);
 });
 
-sprite.addEventListener('pointercancel', () => finishDrag(false));
-sprite.addEventListener('lostpointercapture', () => finishDrag(false));
-sprite.addEventListener('pointerleave', () => {
-  if (!dragStart) sprite.classList.remove('pixel-hit');
-});
-sprite.addEventListener('load', rebuildSpriteHitMap);
+spriteHitbox.addEventListener('pointercancel', () => finishDrag(false));
+spriteHitbox.addEventListener('lostpointercapture', () => finishDrag(false));
+sprite.addEventListener('load', rebuildSpriteHitbox);
+window.addEventListener('resize', rebuildSpriteHitbox);
 
 banner.addEventListener('click', () => banner.classList.add('hidden'));
 modalClose.addEventListener('click', closeModal);

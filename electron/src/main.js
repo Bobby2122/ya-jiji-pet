@@ -28,6 +28,9 @@ let dragState;
 let lastPetActivity = Date.now();
 let walkFrame = false;
 let lastWalkFrameAt = 0;
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+
+if (!hasSingleInstanceLock) app.quit();
 
 function localDayKey(date) {
   const year = date.getFullYear();
@@ -258,12 +261,32 @@ function createWindow() {
   petWindow.on('closed', () => { petWindow = undefined; });
 }
 
+function clampWindowToDisplay(display) {
+  if (!petWindow || petWindow.isDestroyed()) return;
+  const bounds = petWindow.getBounds();
+  const area = display.workArea;
+  const x = Math.max(area.x, Math.min(area.x + area.width - bounds.width, bounds.x));
+  const y = Math.max(area.y, Math.min(area.y + area.height - bounds.height, bounds.y));
+  if (x !== bounds.x || y !== bounds.y) petWindow.setPosition(Math.round(x), Math.round(y), false);
+}
+
+function keepWindowOnScreen() {
+  if (!petWindow || petWindow.isDestroyed()) return;
+  clampWindowToDisplay(screen.getDisplayMatching(petWindow.getBounds()));
+}
+
 function showContextMenu() {
+  const activeDisplay = screen.getDisplayMatching(petWindow.getBounds());
+  const resolution = `${activeDisplay.size.width}×${activeDisplay.size.height}`;
+  const workArea = `${activeDisplay.workArea.width}×${activeDisplay.workArea.height}`;
+  const scale = Math.round(activeDisplay.scaleFactor * 100);
   const skinItems = SKINS.map((skin) => ({
     label: `${skin.name} · ${skin.chance}`,
     click: () => send('ui:preview-skin', skin.id)
   }));
   const menu = Menu.buildFromTemplate([
+    { label: `鸭吉吉桌宠 v${app.getVersion()}`, enabled: false },
+    { label: `显示器 ${resolution} · 缩放 ${scale}% · 可用 ${workArea}`, enabled: false },
     { label: publicState().progressText, enabled: false },
     { type: 'separator' },
     { label: `我的鸭吉吉（${state.collection.length}）`, click: () => send('ui:modal', 'collection') },
@@ -315,7 +338,12 @@ function installIpc() {
     if (!petWindow) return;
     const point = screen.getCursorScreenPoint();
     lastPetActivity = Date.now();
-    dragState = { point, lastPoint: point, bounds: petWindow.getBounds(), direction: 1 };
+    const bounds = petWindow.getBounds();
+    dragState = {
+      lastPoint: point,
+      grabOffset: { x: point.x - bounds.x, y: point.y - bounds.y },
+      direction: 1
+    };
   });
   ipcMain.on('pet:drag-move', () => {
     if (!petWindow || !dragState) return;
@@ -324,16 +352,17 @@ function installIpc() {
     // cursor here keeps drag math in the same coordinate system as the window.
     const point = screen.getCursorScreenPoint();
     const stepX = point.x - dragState.lastPoint.x;
-    const moved = Math.abs(point.x - dragState.point.x) + Math.abs(point.y - dragState.point.y) > 4;
+    const moved = Math.abs(point.x - dragState.lastPoint.x) + Math.abs(point.y - dragState.lastPoint.y) > 0.5;
     if (Math.abs(stepX) > 0.5) dragState.direction = stepX > 0 ? 1 : -1;
-    dragState.lastPoint = point;
     lastPetActivity = Date.now();
     const display = screen.getDisplayNearestPoint(point).workArea;
-    const proposedX = dragState.bounds.x + point.x - dragState.point.x;
-    const proposedY = dragState.bounds.y + point.y - dragState.point.y;
-    const nextX = Math.max(display.x, Math.min(display.x + display.width - WINDOW.width, proposedX));
-    const nextY = Math.max(display.y, Math.min(display.y + display.height - WINDOW.height, proposedY));
+    const bounds = petWindow.getBounds();
+    const proposedX = point.x - dragState.grabOffset.x;
+    const proposedY = point.y - dragState.grabOffset.y;
+    const nextX = Math.max(display.x, Math.min(display.x + display.width - bounds.width, proposedX));
+    const nextY = Math.max(display.y, Math.min(display.y + display.height - bounds.height, proposedY));
     petWindow.setPosition(Math.round(nextX), Math.round(nextY), false);
+    dragState.lastPoint = point;
     if (moved && (state.hatchedToday || state.displayMode === 'pet')) {
       if (Date.now() - lastWalkFrameAt > 160) {
         walkFrame = !walkFrame;
@@ -350,6 +379,7 @@ function installIpc() {
   ipcMain.on('pet:drag-end', () => {
     const direction = dragState?.direction || 1;
     dragState = undefined;
+    keepWindowOnScreen();
     lastPetActivity = Date.now();
     send('pet:motion', { walking: false, direction, walkFrame, idleFor: 0 });
   });
@@ -363,11 +393,22 @@ function installIpc() {
 }
 
 app.whenReady().then(() => {
+  if (!hasSingleInstanceLock) return;
   loadState();
   installIpc();
   createWindow();
   startIdleTracking();
   scheduleTimer = setInterval(checkSchedule, 30_000);
+  screen.on('display-added', keepWindowOnScreen);
+  screen.on('display-removed', keepWindowOnScreen);
+  screen.on('display-metrics-changed', keepWindowOnScreen);
+});
+
+app.on('second-instance', () => {
+  if (!petWindow || petWindow.isDestroyed()) return;
+  keepWindowOnScreen();
+  petWindow.showInactive();
+  petWindow.moveTop();
 });
 
 app.on('window-all-closed', () => app.quit());

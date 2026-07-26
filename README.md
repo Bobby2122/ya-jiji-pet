@@ -36,6 +36,8 @@
 
 右键鸭吉吉可以查看孵化进度、收藏库、异色图鉴，预览皮肤与孵化动画，以及开关晚饭提醒和开机启动。首次运行未签名版本时，Windows 可能显示 SmartScreen 提示。
 
+安装新版前，请先右键旧版鸭吉吉并选择“退出鸭吉吉”，再运行安装包。安装后可在右键菜单第一行确认当前版本；下一行会显示 Windows 识别到的分辨率、缩放率和可用桌面区域，方便排查多显示器或高 DPI 问题。
+
 开发和构建说明见 [`electron/README.md`](electron/README.md)。
 
 ## macOS 使用
@@ -62,8 +64,8 @@ git push -u origin main
 推送到 `main` 后，GitHub Actions 会构建 Windows 文件并放在该次任务的 Artifacts 中。发布给朋友时创建版本标签：
 
 ```bash
-git tag v0.3.3
-git push origin v0.3.3
+git tag v0.3.4
+git push origin v0.3.4
 ```
 
 标签构建成功后，工作流会自动创建 GitHub Release 并附上安装版与免安装版。
